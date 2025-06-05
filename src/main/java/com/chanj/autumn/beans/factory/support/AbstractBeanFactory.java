@@ -6,6 +6,8 @@ import com.chanj.autumn.beans.factory.config.BeanDefinition;
 import com.chanj.autumn.beans.factory.config.BeanFactoryPostProcessor;
 import com.chanj.autumn.beans.factory.config.BeanPostProcessor;
 import com.chanj.autumn.beans.factory.config.ConfigurableBeanFactory;
+import com.chanj.autumn.utils.Classutils;
+import org.junit.platform.commons.util.ClassUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +15,12 @@ import java.util.List;
 public abstract class AbstractBeanFactory extends DefaultSingletonBeanRegistry implements ConfigurableBeanFactory {
 
     private final List<BeanPostProcessor> beanPostprocessors = new ArrayList<BeanPostProcessor>();
+
+    private ClassLoader beanClassLoader = Classutils.getDefaultClassLoader();
+
+    public ClassLoader getBeanClassLoader() {
+        return beanClassLoader;
+    }
 
     @Override
     public Object getBean(String name) throws BeansException {

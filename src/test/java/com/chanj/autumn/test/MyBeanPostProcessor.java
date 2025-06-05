@@ -9,7 +9,7 @@ public class MyBeanPostProcessor implements BeanPostProcessor {
     public Object postProcessorAfterInitialization(Object bean, String beanName) throws BeansException {
         if ("userService".equals(beanName)) {
             UserService userService = (UserService) bean;
-            userService.setLocation("改为：北京");
+            userService.setLocation("改为：广州");
         }
         return bean;
     }
@@ -18,7 +18,7 @@ public class MyBeanPostProcessor implements BeanPostProcessor {
     public Object postProcessorBeforeInitialization(Object bean, String beanName) throws BeansException {
         if ("userService".equals(beanName)) {
             UserService userService = (UserService) bean;
-            userService.setLocation("改为：北京");
+            userService.setLocation("改为：广州");
         }
         return bean;
     }

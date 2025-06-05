@@ -1,8 +1,10 @@
 package com.chanj.autumn.beans.factory.support;
 
+import cn.hutool.core.util.StrUtil;
 import com.chanj.autumn.beans.BeansException;
 import com.chanj.autumn.beans.PropertyValue;
 import com.chanj.autumn.beans.PropertyValues;
+import com.chanj.autumn.beans.factory.*;
 import com.chanj.autumn.beans.factory.config.AutowireCapableBeanFactory;
 import com.chanj.autumn.beans.factory.config.BeanDefinition;
 import com.chanj.autumn.beans.factory.config.BeanPostProcessor;
@@ -11,6 +13,7 @@ import cn.hutool.core.bean.BeanUtil;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 
 public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFactory implements AutowireCapableBeanFactory {
@@ -21,13 +24,22 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
         try {
             bean  = createBeanInstance(beanDefinition, beanName, args);
             applyPropertyValues(beanName, bean, beanDefinition);
-            //TODO
+
             bean = initializeBean(beanName, bean, beanDefinition);
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
+
+        registerDisposableBeanIfNecessary(beanName, bean, beanDefinition);
+
         addSingleton(beanName, bean);
         return bean;
+    }
+
+    protected void registerDisposableBeanIfNecessary(String beanName, Object bean, BeanDefinition beanDefinition) throws BeansException {
+        if(bean instanceof DisposableBean || StrUtil.isNotEmpty(beanDefinition.getDestroyMethodName())) {
+            registerDisposableBean(beanName, new DisposableBeanAdapter(bean, beanName, beanDefinition));
+        }
     }
 
     protected Object createBeanInstance(BeanDefinition beanDefinition, String beanName, Object[] args) throws BeansException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
@@ -73,23 +85,49 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
     };
 
     private Object initializeBean(String beanName, Object bean, BeanDefinition beanDefinition){
+        if(bean instanceof BeanClassLoaderAware){
+            ((BeanClassLoaderAware)bean).setBeanClassLoader(getBeanClassLoader());
+        }
+        if(bean instanceof BeanFactoryAware){
+            ((BeanFactoryAware)bean).setBeanFactory(this);
+        }
+        if(bean instanceof BeanNameAware){
+            ((BeanNameAware)bean).setBeanName(beanName);
+        }
+
         Object wrappedBean = applyBeanPostProcessorsBeforeInitialization(bean,beanName);
 
-        invokeInitmethods(beanName, wrappedBean, beanDefinition);
-
+        try {
+            invokeInitmethods(beanName, wrappedBean, beanDefinition);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         wrappedBean = applyBeanPostProcessorsAfterInitialization(bean,beanName);
         return wrappedBean;
     }
 
     //TODO
-    private void invokeInitmethods(String beanName, Object wrappedBean, BeanDefinition beanDefinition) {
+    private void invokeInitmethods(String beanName, Object wrappedBean, BeanDefinition beanDefinition) throws Exception {
+        // 用于实现了InitializingBean接口方法的初始化实现
+        if(wrappedBean instanceof InitializingBean){
+            ((InitializingBean) wrappedBean).afterPropertiesSet();;
+        }
 
+        String initMethodName = beanDefinition.getInitMethodName();
+        if(StrUtil.isNotEmpty(initMethodName)){
+            Method initMethod = beanDefinition.getBeanClass().getMethod(initMethodName);
+
+            if(initMethod == null){
+                throw new NoSuchMethodException(initMethodName);
+            }
+            initMethod.invoke(wrappedBean);
+        }
     }
     @Override
     public Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName) throws BeansException {
         Object result = existingBean;
         for(BeanPostProcessor beanPostProcessor : getBeanPostProcessors()){
-            Object current= beanPostProcessor.postProcessorBeforeInitialization(result, beanName);
+            Object current= beanPostProcessor.postProcessorAfterInitialization(result, beanName);
             if(null == current) return result;
             result = current;
         }
@@ -100,7 +138,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
     public Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName) throws BeansException {
         Object result = existingBean;
         for(BeanPostProcessor beanPostProcessor : getBeanPostProcessors()){
-            Object current= beanPostProcessor.postProcessorAfterInitialization(result, beanName);
+            Object current= beanPostProcessor.postProcessorBeforeInitialization(result, beanName);
             if(null == current) return result;
             result = current;
         }
